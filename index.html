@@ -150,15 +150,19 @@
                     <div class="space-y-2 text-sm text-slate-300 leading-relaxed">
                         <div class="flex flex-wrap items-center gap-2">
                             <h2 id="info-title" class="font-bold text-white text-base">Hur fungerar vägvisaren & var kommer datan ifrån?</h2>
-                            <span class="px-2 py-0.5 text-[11px] font-mono uppercase bg-emerald-500/15 text-emerald-300 rounded border border-emerald-500/30">SMHI API PMP3G v2</span>
+                            <span class="px-2 py-0.5 text-[11px] font-mono uppercase bg-emerald-500/15 text-emerald-300 rounded border border-emerald-500/30">SMHI API SNOW1G v1</span>
                         </div>
                         <p id="info-desc-1">
-                            All väderdata hämtas i realtid direkt från <strong>SMHI Öppna Data</strong> (Sveriges meteorologiska och hydrologiska institut) via deras punktprognos-API (<code class="text-cyan-300 bg-slate-900/80 px-1.5 py-0.5 rounded">pmp3g</code>).
+                            All väderdata hämtas i realtid direkt från <strong>SMHI Öppna Data</strong> (Sveriges meteorologiska och hydrologiska institut) via deras punktprognos-API (<code class="text-cyan-300 bg-slate-900/80 px-1.5 py-0.5 rounded">snow1g</code>).
                         </p>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                             <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
                                 <span id="info-wind-title" class="font-semibold text-blue-300 block mb-0.5">💨 Motvinds- & medvindsberäkning</span>
-                                <span id="info-wind-desc" class="text-xs text-slate-400">Från dina utplacerade start- och slutpunkter på kartan beräknas din exakta kompasskurs (0–360°). Vi jämför den med SMHI:s vindriktning (<code class="text-slate-300">wd</code>) och vindstyrka (<code class="text-slate-300">ws</code>) för att visa exakt hur många m/s som bromsar eller skjuter på.</span>
+                                <span id="info-wind-desc" class="text-xs text-slate-400">Från dina utplacerade start- och slutpunkter på kartan beräknas din exakta kompasskurs (0–360°). Vi jämför den med SMHI:s vindriktning (<code class="text-slate-300">wind_from_direction</code>) och vindstyrka (<code class="text-slate-300">wind_speed</code>) för att visa exakt hur många m/s som bromsar eller skjuter på.</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span id="info-ice-title" class="font-semibold text-amber-300 block mb-0.5">❄️ Svartis- & halkvarnare</span>
+                                <span id="info-ice-desc" class="text-xs text-slate-400">När temperaturen (<code class="text-slate-300">air_temperature</code>) ligger nära eller under 0°C samtidigt som det förekommer nederbörd (<code class="text-slate-300">precipitation_amount_mean</code>) eller mycket hög luftfuktighet (<code class="text-slate-300">relative_humidity &gt; 85%</code>) varnar systemet för förrädisk "svartis" och rekommenderar dubbdäck.</span>
                             </div>
                             <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
                                 <span id="info-ice-title" class="font-semibold text-amber-300 block mb-0.5">❄️ Svartis- & halkvarnare</span>
@@ -460,11 +464,11 @@
                 infoBtnLabel: "Om datan",
                 langBtnLabel: "English",
                 infoTitle: "Hur fungerar vägvisaren & var kommer datan ifrån?",
-                infoDesc1: "All väderdata hämtas i realtid direkt från <strong>SMHI Öppna Data</strong> via deras öppna punktprognos-API (<code class='text-cyan-300 bg-slate-900/80 px-1.5 py-0.5 rounded'>pmp3g</code>) för mittpunkten på din utritade cykelrutt. Kartan och adressökningen drivs av <strong>OpenStreetMap</strong>.",
+                infoDesc1: "All väderdata hämtas i realtid direkt från <strong>SMHI Öppna Data</strong> via deras öppna punktprognos-API (<code class='text-cyan-300 bg-slate-900/80 px-1.5 py-0.5 rounded'>snow1g</code>) för mittpunkten på din utritade cykelrutt. Kartan och adressökningen drivs av <strong>OpenStreetMap</strong>.",
                 infoWindTitle: "💨 Motvinds- & medvindsberäkning",
-                infoWindDesc: "Utifrån dina markörer (Start A och Slut B) räknar vi ut exakt kompassriktning (0–360°). Vi jämför den med vindens riktning (wd) och hastighet (ws) med trigonometri för att visa exakt hur många m/s som bromsar eller skjuter på.",
+                infoWindDesc: "Utifrån dina markörer (Start A och Slut B) räknar vi ut exakt kompassriktning (0–360°). Vi jämför den med vindens riktning (wind_from_direction) och hastighet (wind_speed) med trigonometri för att visa exakt hur många m/s som bromsar eller skjuter på.",
                 infoIceTitle: "❄️ Svartis- & halkvarnare",
-                infoIceDesc: "När temperaturen (t) ligger nära eller under 0°C samtidigt som det förekommer nederbörd (pmean) eller hög luftfuktighet (r > 85%) varnar systemet för förrädisk 'svartis' och rekommenderar dubbdäck.",
+                infoIceDesc: "När temperaturen (air_temperature) ligger nära eller under 0°C samtidigt som det förekommer nederbörd (precipitation_amount_mean) eller hög luftfuktighet (relative_humidity > 85%) varnar systemet för förrädisk 'svartis' och rekommenderar dubbdäck.",
                 mapHeading: "1. Välj Start (Hem) & Slut (Jobb) på kartan",
                 mapSubheading: "Dra markörerna, sök på en adress eller klicka i kartan för att sätta din cykelrutt.",
                 modeStartLabel: "Klick sätter Start (A)",
@@ -547,11 +551,11 @@
                 infoBtnLabel: "About Data",
                 langBtnLabel: "Svenska",
                 infoTitle: "How does it work & where does the data come from?",
-                infoDesc1: "All weather data is fetched live from <strong>SMHI Open Data</strong> using their official point forecast API (<code class='text-cyan-300 bg-slate-900/80 px-1.5 py-0.5 rounded'>pmp3g</code>) for the midpoint of your selected bike route. Map tiles and geocoding are powered by <strong>OpenStreetMap</strong>.",
+                infoDesc1: "All weather data is fetched live from <strong>SMHI Open Data</strong> using their official point forecast API (<code class='text-cyan-300 bg-slate-900/80 px-1.5 py-0.5 rounded'>snow1g</code>) for the midpoint of your selected bike route. Map tiles and geocoding are powered by <strong>OpenStreetMap</strong>.",
                 infoWindTitle: "💨 Headwind & Tailwind Calculation",
-                infoWindDesc: "From your placed Start (A) and End (B) markers, we compute your exact compass bearing (0–360°) and compare it with wind direction (wd) and wind speed (ws) using trigonometry to calculate exact m/s headwind or tailwind.",
+                infoWindDesc: "From your placed Start (A) and End (B) markers, we compute your exact compass bearing (0–360°) and compare it with wind direction (wind_from_direction) and wind speed (wind_speed) using trigonometry to calculate exact m/s headwind or tailwind.",
                 infoIceTitle: "❄️ Black Ice & Slipperiness Detector",
-                infoIceDesc: "When temperature (t) drops near or below 0°C combined with precipitation (pmean) or high relative humidity (r > 85%), the system flags hazardous 'black ice' and advises studded tires.",
+                infoIceDesc: "When temperature (air_temperature) drops near or below 0°C combined with precipitation (precipitation_amount_mean) or high relative humidity (relative_humidity > 85%), the system flags hazardous 'black ice' and advises studded tires.",
                 mapHeading: "1. Pick Start (Home) & End (Work) on the Map",
                 mapSubheading: "Drag the markers, search an address, or click the map to set your commute route.",
                 modeStartLabel: "Click sets Start (A)",
@@ -1047,7 +1051,7 @@
             const refreshIcon = document.getElementById('refresh-icon');
             if (refreshIcon) refreshIcon.classList.add('animate-spin');
 
-            const url = `https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/geotype/point/lon/${lon}/lat/${lat}/data.json`;
+            const url = `https://opendata-download-metfcst.smhi.se/api/category/snow1g/version/1/geotype/point/lon/${lon}/lat/${lat}/data.json`;
 
             try {
                 const response = await fetch(url);
@@ -1099,26 +1103,19 @@
                 const pmean = (hour >= 16 && hour <= 18 && dayIdx % 2 === 0) ? 0.4 : 0.0;
 
                 series.push({
-                    validTime: d.toISOString(),
-                    parameters: [
-                        { name: 't', values: [temp] },
-                        { name: 'ws', values: [ws] },
-                        { name: 'gust', values: [ +(ws * 1.45).toFixed(1) ] },
-                        { name: 'wd', values: [wd] },
-                        { name: 'pmean', values: [pmean] },
-                        { name: 'r', values: [86] },
-                        { name: 'Wsymb2', values: [pmean > 0 ? 12 : (dayIdx % 2 === 0 ? 3 : 1)] }
-                    ]
+                    time: d.toISOString(),
+                    data: {
+                        air_temperature: temp,
+                        wind_speed: ws,
+                        wind_speed_of_gust: +(ws * 1.45).toFixed(1),
+                        wind_from_direction: wd,
+                        precipitation_amount_mean: pmean,
+                        relative_humidity: 86,
+                        symbol_code: pmean > 0 ? 12 : (dayIdx % 2 === 0 ? 3 : 1)
+                    }
                 });
             }
             return series;
-        }
-
-        // Helper to extract a parameter from an SMHI timeSeries entry
-        function getParam(entry, paramName, defaultVal = 0) {
-            if (!entry || !entry.parameters) return defaultVal;
-            const found = entry.parameters.find(p => p.name === paramName);
-            return found && found.values && found.values.length > 0 ? found.values[0] : defaultVal;
         }
 
         // Find the forecast entry closest to the target hour (0-23) on the selected day offset (0-4)
@@ -1132,7 +1129,7 @@
             let minDiff = Infinity;
 
             for (const item of weatherTimeSeries) {
-                const itemTime = new Date(item.validTime).getTime();
+                const itemTime = new Date(item.time).getTime();
                 const diff = Math.abs(itemTime - targetDate.getTime());
                 if (diff < minDiff) {
                     minDiff = diff;
@@ -1146,13 +1143,15 @@
         // 4. PHYSICS: HEADWIND & BLACK ICE ENGINE
         // ==========================================
         function analyzeTrip(forecastEntry, travelBearing) {
-            const t = getParam(forecastEntry, 't', 2.0);
-            const ws = getParam(forecastEntry, 'ws', 4.0);
-            const gust = getParam(forecastEntry, 'gust', ws * 1.3);
-            const wd = getParam(forecastEntry, 'wd', 180); // Direction wind blows FROM
-            const pmean = getParam(forecastEntry, 'pmean', 0);
-            const r = getParam(forecastEntry, 'r', 75);
-            const wsymb = getParam(forecastEntry, 'Wsymb2', 3);
+            const d = forecastEntry && forecastEntry.data ? forecastEntry.data : {};
+            
+            const t = d.air_temperature !== undefined ? d.air_temperature : 2.0;
+            const ws = d.wind_speed !== undefined ? d.wind_speed : 4.0;
+            const gust = d.wind_speed_of_gust !== undefined ? d.wind_speed_of_gust : ws * 1.3;
+            const wd = d.wind_from_direction !== undefined ? d.wind_from_direction : 180; // Direction wind blows FROM
+            const pmean = d.precipitation_amount_mean !== undefined ? d.precipitation_amount_mean : 0;
+            const r = d.relative_humidity !== undefined ? d.relative_humidity : 75;
+            const wsymb = d.symbol_code !== undefined ? d.symbol_code : 3;
 
             // Angle difference between where cyclist is heading and where wind comes FROM
             // If cyclist rides East (90°) and wind is FROM East (90°), angleDiff = 0° -> 100% Headwind.
@@ -1177,7 +1176,7 @@
             }
 
             return {
-                validTime: forecastEntry ? forecastEntry.validTime : new Date().toISOString(),
+                validTime: forecastEntry ? forecastEntry.time : new Date().toISOString(),
                 t,
                 feelsLike,
                 ws,
