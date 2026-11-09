@@ -1,0 +1,1506 @@
+<!DOCTYPE html>
+<html lang="sv" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cykelpendlarens Vägvisare | Av Alfred Stengard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Leaflet Maps CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        nordic: {
+                            950: '#090d16',
+                            900: '#111827',
+                            800: '#1e293b',
+                            700: '#334155',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #090d16;
+            color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.65);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .compass-btn {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .compass-btn.active {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            border-color: #60a5fa;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.45);
+            transform: scale(1.04);
+        }
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 0.9; transform: scale(1); }
+            50% { opacity: 0.55; transform: scale(0.97); }
+        }
+        .animate-pulse-slow {
+            animation: pulse-slow 3s infinite ease-in-out;
+        }
+        /* Leaflet Custom Dark Styling */
+        #commute-map {
+            height: 360px;
+            width: 100%;
+            z-index: 10;
+        }
+        .leaflet-container {
+            background: #0f172a;
+            font-family: 'Inter', sans-serif;
+        }
+        .custom-marker-pin {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9999px;
+            font-weight: 800;
+            font-size: 12px;
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+            border: 2px solid #fff;
+            transition: transform 0.15s ease;
+        }
+        .custom-marker-pin:hover {
+            transform: scale(1.12);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-blue-500 selection:text-white">
+
+    <!-- Background Decorative Glows -->
+    <div class="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        <div class="absolute -top-40 -left-40 w-96 h-96 bg-blue-600/15 rounded-full blur-3xl"></div>
+        <div class="absolute top-1/3 -right-40 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl"></div>
+        <div class="absolute -bottom-40 left-1/3 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl"></div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="relative z-10 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-grow flex flex-col gap-6">
+
+        <!-- Header -->
+        <header class="glass-card rounded-2xl p-5 sm:p-6 shadow-xl">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-start sm:items-center gap-4">
+                    <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-blue-500/25 shrink-0">
+                        <i data-lucide="bike" class="w-7 h-7 sm:w-8 sm:h-8 text-slate-950 stroke-[2.2]"></i>
+                    </div>
+                    <div>
+                        <div class="flex flex-wrap items-center gap-2.5">
+                            <h1 id="app-title" class="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-white">
+                                Cykelpendlarens Vägvisare
+                            </h1>
+                            <span id="author-badge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                                <i data-lucide="award" class="w-3.5 h-3.5 text-blue-400"></i>
+                                <span id="author-text">Av Alfred Stengard</span>
+                            </span>
+                        </div>
+                        <p id="app-subtitle" class="text-slate-400 text-sm sm:text-base mt-1">
+                            Realtidsanalys av motvind, medvind och halkrisk med SMHI Öppna Data
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Controls: Info Modal Trigger & Language Toggle -->
+                <div class="flex items-center gap-2.5 self-end md:self-center">
+                    <button id="info-btn" onclick="toggleInfoModal()" class="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 text-sm font-medium transition shadow-sm">
+                        <i data-lucide="info" class="w-4 h-4 text-cyan-400"></i>
+                        <span id="info-btn-label">Om datan</span>
+                    </button>
+
+                    <button id="lang-btn" onclick="toggleLanguage()" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-semibold transition shadow-md shadow-blue-900/30">
+                        <i data-lucide="globe" class="w-4 h-4"></i>
+                        <span id="lang-btn-label">English</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Collapsible / Highlighted Info Box (Hidden by default) -->
+        <section id="info-box" class="hidden glass-card rounded-2xl p-5 border-l-4 border-l-cyan-400 transition-all duration-300">
+            <div class="flex items-start justify-between gap-4">
+                <div class="flex items-start gap-3.5">
+                    <div class="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 shrink-0 mt-0.5">
+                        <i data-lucide="database" class="w-5 h-5"></i>
+                    </div>
+                    <div class="space-y-2 text-sm text-slate-300 leading-relaxed">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h2 id="info-title" class="font-bold text-white text-base">Hur fungerar vägvisaren & var kommer datan ifrån?</h2>
+                            <span class="px-2 py-0.5 text-[11px] font-mono uppercase bg-emerald-500/15 text-emerald-300 rounded border border-emerald-500/30">SMHI API PMP3G v2</span>
+                        </div>
+                        <p id="info-desc-1">
+                            All väderdata hämtas i realtid direkt från <strong>SMHI Öppna Data</strong> (Sveriges meteorologiska och hydrologiska institut) via deras punktprognos-API (<code class="text-cyan-300 bg-slate-900/80 px-1.5 py-0.5 rounded">pmp3g</code>).
+                        </p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span id="info-wind-title" class="font-semibold text-blue-300 block mb-0.5">💨 Motvinds- & medvindsberäkning</span>
+                                <span id="info-wind-desc" class="text-xs text-slate-400">Från dina utplacerade start- och slutpunkter på kartan beräknas din exakta kompasskurs (0–360°). Vi jämför den med SMHI:s vindriktning (<code class="text-slate-300">wd</code>) och vindstyrka (<code class="text-slate-300">ws</code>) för att visa exakt hur många m/s som bromsar eller skjuter på.</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span id="info-ice-title" class="font-semibold text-amber-300 block mb-0.5">❄️ Svartis- & halkvarnare</span>
+                                <span id="info-ice-desc" class="text-xs text-slate-400">När temperaturen (<code class="text-slate-300">t</code>) ligger nära eller under 0°C samtidigt som det förekommer nederbörd (<code class="text-slate-300">pmean</code>) eller mycket hög luftfuktighet (<code class="text-slate-300">r &gt; 85%</code>) varnar systemet för förrädisk "svartis" och rekommenderar dubbdäck.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button onclick="toggleInfoModal()" class="text-slate-400 hover:text-white p-1 rounded-lg transition" aria-label="Close info">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- Configuration Section: Interactive Map & Route Settings -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Left Column: Interactive Route Map (7 cols) -->
+            <div class="lg:col-span-7 glass-card rounded-2xl p-5 sm:p-6 flex flex-col justify-between gap-4">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h2 class="text-base font-bold text-white flex items-center gap-2">
+                            <i data-lucide="map-pin" class="w-4 h-4 text-blue-400"></i>
+                            <span id="map-heading">1. Välj Start (Hem) & Slut (Jobb) på kartan</span>
+                        </h2>
+                        <p id="map-subheading" class="text-xs text-slate-400 mt-0.5">
+                            Dra markörerna, sök på en adress eller klicka i kartan för att sätta din cykelrutt.
+                        </p>
+                    </div>
+
+                    <!-- Click Mode Switcher (Start vs End) -->
+                    <div class="inline-flex rounded-xl bg-slate-900 p-1 border border-slate-700/80 text-xs font-semibold">
+                        <button type="button" id="mode-start-btn" onclick="setMapClickMode('start')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white shadow transition">
+                            <span class="w-2 h-2 rounded-full bg-white"></span>
+                            <span id="mode-start-label">Sätt Start (A)</span>
+                        </button>
+                        <button type="button" id="mode-end-btn" onclick="setMapClickMode('end')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-300 hover:text-white transition">
+                            <span class="w-2 h-2 rounded-full bg-blue-400"></span>
+                            <span id="mode-end-label">Sätt Slut (B)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Address Search Input Row (Start & End) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <!-- Start Search -->
+                    <div class="relative">
+                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-emerald-400 mb-1 flex items-center justify-between">
+                            <span id="label-start-point">Startpunkt (A - Hem)</span>
+                            <span id="start-coords-label" class="font-mono text-[10px] text-slate-400">59.314, 18.070</span>
+                        </label>
+                        <div class="flex gap-1.5">
+                            <input type="text" id="start-search-input" onkeydown="if(event.key==='Enter') searchAddress('start')" placeholder="Sök startadress (t.ex. Södermalm)..." class="w-full rounded-xl bg-slate-900/90 border border-slate-700 text-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <button type="button" onclick="searchAddress('start')" class="px-3 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition shrink-0" title="Sök start">
+                                <i data-lucide="search" class="w-3.5 h-3.5"></i>
+                            </button>
+                            <button type="button" onclick="useGeolocationForStart()" class="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 text-xs font-semibold transition shrink-0" title="Använd min GPS-position som Start">
+                                <i data-lucide="locate-fixed" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- End Search -->
+                    <div class="relative">
+                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-blue-400 mb-1 flex items-center justify-between">
+                            <span id="label-end-point">Slutpunkt (B - Jobb/Skola)</span>
+                            <span id="end-coords-label" class="font-mono text-[10px] text-slate-400">59.349, 18.071</span>
+                        </label>
+                        <div class="flex gap-1.5">
+                            <input type="text" id="end-search-input" onkeydown="if(event.key==='Enter') searchAddress('end')" placeholder="Sök slutadress (t.ex. KTH, Solna)..." class="w-full rounded-xl bg-slate-900/90 border border-slate-700 text-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <button type="button" onclick="searchAddress('end')" class="px-3 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-xs font-semibold transition shrink-0" title="Sök mål">
+                                <i data-lucide="search" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Interactive Map Container -->
+                <div class="relative rounded-2xl overflow-hidden border border-slate-700/80 shadow-inner">
+                    <div id="commute-map"></div>
+                    <!-- Floating Map Overlay Pill -->
+                    <div class="absolute bottom-3 left-3 z-[400] bg-slate-950/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-700/80 text-[11px] text-slate-300 flex items-center gap-3 shadow-lg">
+                        <span class="inline-flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                            <span id="legend-start">A: Start</span>
+                        </span>
+                        <span class="inline-flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span>
+                            <span id="legend-end">B: Slut</span>
+                        </span>
+                        <button onclick="swapStartAndEnd()" class="text-cyan-400 hover:text-cyan-300 font-semibold inline-flex items-center gap-1 ml-1 pl-2 border-l border-slate-700">
+                            <i data-lucide="arrow-left-right" class="w-3 h-3"></i>
+                            <span id="btn-swap-route">Byt håll</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Route Telemetry, 5-Day Selector & Commute Times (5 cols) -->
+            <div class="lg:col-span-5 glass-card rounded-2xl p-5 sm:p-6 flex flex-col justify-between gap-5">
+                
+                <!-- Top Header & Live Status -->
+                <div class="flex items-center justify-between">
+                    <h2 class="text-base font-bold text-white flex items-center gap-2">
+                        <i data-lucide="clock" class="w-4 h-4 text-cyan-400"></i>
+                        <span id="settings-heading">2. Pendlingsschema & Prognosdag</span>
+                    </h2>
+                    <div class="flex items-center gap-2">
+                        <span id="api-status-badge" class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                            <span id="api-status-text">SMHI Live</span>
+                        </span>
+                        <button onclick="fetchWeatherData()" class="inline-flex items-center justify-center p-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-xs font-medium transition" title="Uppdatera SMHI-data">
+                            <i data-lucide="refresh-cw" id="refresh-icon" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 5-Day Forecast Day Stepper -->
+                <div class="bg-slate-900/80 rounded-2xl p-3.5 border border-slate-800 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span id="label-forecast-day" class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <i data-lucide="calendar-days" class="w-3.5 h-3.5 text-blue-400"></i>
+                            Välj dag (5-dygnsprognos)
+                        </span>
+                        <span id="selected-date-label" class="text-xs font-medium text-blue-300 font-mono">Idag</span>
+                    </div>
+                    <div id="day-selector-grid" class="grid grid-cols-5 gap-1.5">
+                        <!-- Dynamically populated 5 day buttons -->
+                    </div>
+                </div>
+
+                <!-- Commute Time Pickers (Styled Card) -->
+                <div class="bg-slate-900/80 rounded-2xl p-4 border border-slate-800 space-y-3">
+                    <span id="label-commute-times" class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <i data-lucide="alarm-clock" class="w-3.5 h-3.5 text-amber-400"></i>
+                        Dina pendlingstider
+                    </span>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800/90">
+                            <label for="morning-time" class="block text-[11px] font-semibold uppercase tracking-wider text-amber-400/90 mb-1.5 flex items-center gap-1.5">
+                                <i data-lucide="sunrise" class="w-3.5 h-3.5"></i>
+                                <span id="label-morning-time">Ditresa (A → B)</span>
+                            </label>
+                            <select id="morning-time" onchange="recalculateCommute()" class="w-full rounded-lg bg-slate-900 border border-slate-700 text-white px-2.5 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="5">05:00</option>
+                                <option value="6">06:00</option>
+                                <option value="7">07:00</option>
+                                <option value="8" selected>08:00</option>
+                                <option value="9">09:00</option>
+                                <option value="10">10:00</option>
+                            </select>
+                        </div>
+                        <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800/90">
+                            <label for="afternoon-time" class="block text-[11px] font-semibold uppercase tracking-wider text-indigo-400 mb-1.5 flex items-center gap-1.5">
+                                <i data-lucide="sunset" class="w-3.5 h-3.5"></i>
+                                <span id="label-afternoon-time">Hemresa (B → A)</span>
+                            </label>
+                            <select id="afternoon-time" onchange="recalculateCommute()" class="w-full rounded-lg bg-slate-900 border border-slate-700 text-white px-2.5 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="14">14:00</option>
+                                <option value="15">15:00</option>
+                                <option value="16">16:00</option>
+                                <option value="17" selected>17:00</option>
+                                <option value="18">18:00</option>
+                                <option value="19">19:00</option>
+                                <option value="20">20:00</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Calculated Route Summary Box -->
+                <div class="bg-slate-900/80 rounded-2xl p-4 border border-slate-800 space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                        <span id="route-summary-title" class="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+                            <i data-lucide="route" class="w-3.5 h-3.5"></i>
+                            Beräknad cykelrutt (A → B)
+                        </span>
+                        <span id="selected-bearing-badge" class="text-xs font-mono text-cyan-300 bg-cyan-500/10 px-2.5 py-0.5 rounded-lg border border-cyan-500/20">
+                            0° (N) ⇄ 180° (S)
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 text-center">
+                        <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                            <span id="stat-dist-label" class="block text-[10px] uppercase tracking-wider text-slate-400">Avstånd</span>
+                            <span id="stat-dist-val" class="text-base sm:text-lg font-extrabold text-white">3.9 km</span>
+                        </div>
+                        <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                            <span id="stat-time-label" class="block text-[10px] uppercase tracking-wider text-slate-400">Cykeltid (~20 km/h)</span>
+                            <span id="stat-time-val" class="text-base sm:text-lg font-extrabold text-white">12 min</span>
+                        </div>
+                        <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                            <span id="stat-bearing-label" class="block text-[10px] uppercase tracking-wider text-slate-400">Riktning (Dit)</span>
+                            <span id="stat-bearing-val" class="text-base sm:text-lg font-extrabold text-blue-400">1° (N)</span>
+                        </div>
+                    </div>
+
+                    <p id="direction-help" class="text-[11px] text-slate-400 leading-relaxed">
+                        SMHI-prognosen hämtas automatiskt för ruttens mittpunkt. Hemresan (B → A) beräknas i motsatt riktning.
+                    </p>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Overall Daily Commute Verdict Banner -->
+        <section id="verdict-banner" class="rounded-2xl p-5 sm:p-6 border transition-all duration-300 shadow-lg bg-gradient-to-r from-slate-800/90 to-slate-900/90 border-slate-700">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-start sm:items-center gap-4">
+                    <div id="verdict-icon-box" class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                        <i data-lucide="sparkles" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <span id="verdict-label" class="text-xs font-bold uppercase tracking-wider text-blue-400">Dagens cykeldom</span>
+                        <h3 id="verdict-title" class="text-lg sm:text-xl font-extrabold text-white mt-0.5">Analyserar väderdata från SMHI...</h3>
+                        <p id="verdict-subtitle" class="text-sm text-slate-300 mt-0.5">Hämtar vind- och temperaturprognos för din rutt.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 self-start sm:self-center bg-slate-950/70 px-4 py-2.5 rounded-xl border border-slate-800 shrink-0">
+                    <div class="text-right">
+                        <span id="tire-rec-label" class="block text-[11px] uppercase tracking-wider text-slate-400">Däckrekommendation</span>
+                        <span id="tire-rec-value" class="text-sm font-bold text-emerald-400">Sommardäck OK</span>
+                    </div>
+                    <i data-lucide="disc" id="tire-icon" class="w-6 h-6 text-emerald-400"></i>
+                </div>
+            </div>
+        </section>
+
+        <!-- Morning & Afternoon Commute Cards -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <!-- Morning Card -->
+            <div id="morning-card" class="glass-card rounded-2xl p-5 sm:p-6 flex flex-col justify-between gap-5 relative overflow-hidden">
+                <!-- Dynamic content injected by JS -->
+            </div>
+
+            <!-- Afternoon Card -->
+            <div id="afternoon-card" class="glass-card rounded-2xl p-5 sm:p-6 flex flex-col justify-between gap-5 relative overflow-hidden">
+                <!-- Dynamic content injected by JS -->
+            </div>
+
+        </section>
+
+        <!-- Footer -->
+        <footer class="mt-auto pt-4 pb-2 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
+            <div class="flex items-center gap-2">
+                <span class="font-semibold text-slate-200" id="footer-author">Skapad av Alfred Stengard</span>
+                <span>•</span>
+                <span id="footer-app-name">Cykelpendlarens Vägvisare</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <span id="footer-source">Källa: SMHI Öppna Data (CC BY 4.0)</span>
+                <span id="last-updated" class="font-mono text-slate-500"></span>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        // ==========================================
+        // 1. STATE, MAP COORDINATES & TRANSLATIONS
+        // ==========================================
+        let currentLang = 'sv';
+        let morningBearing = 1; // Calculated dynamically from Start -> End
+        let routeDistanceKm = 3.9;
+        let selectedDayOffset = 0; // 0 = Today, 1 = Tomorrow, ..., 4 = +4 days
+        let weatherTimeSeries = [];
+        let isUsingFallback = false;
+
+        // Default route: Stockholm (Södermalm -> KTH)
+        let startCoords = { lat: 59.3145, lon: 18.0700 };
+        let endCoords   = { lat: 59.3498, lon: 18.0707 };
+        let mapClickMode = 'start'; // 'start' or 'end'
+
+        // Leaflet instances
+        let mapInstance = null;
+        let startMarker = null;
+        let endMarker = null;
+        let routeLine = null;
+
+        const directions = [
+            { deg: 0,   sv: 'Norr (N)',     en: 'North (N)',     shortSv: 'N',  shortEn: 'N' },
+            { deg: 45,  sv: 'Nordost (NO)', en: 'Northeast (NE)',shortSv: 'NO', shortEn: 'NE' },
+            { deg: 90,  sv: 'Öster (Ö)',    en: 'East (E)',      shortSv: 'Ö',  shortEn: 'E' },
+            { deg: 135, sv: 'Sydost (SO)',  en: 'Southeast (SE)',shortSv: 'SO', shortEn: 'SE' },
+            { deg: 180, sv: 'Söder (S)',    en: 'South (S)',     shortSv: 'S',  shortEn: 'S' },
+            { deg: 225, sv: 'Sydväst (SV)', en: 'Southwest (SW)',shortSv: 'SV', shortEn: 'SW' },
+            { deg: 270, sv: 'Väster (V)',   en: 'West (W)',      shortSv: 'V',  shortEn: 'W' },
+            { deg: 315, sv: 'Nordväst (NV)',en: 'Northwest (NW)',shortSv: 'NV', shortEn: 'NW' }
+        ];
+
+        const i18n = {
+            sv: {
+                appTitle: "Cykelpendlarens Vägvisare",
+                authorText: "Av Alfred Stengard",
+                appSubtitle: "Realtidsanalys av motvind, medvind och halkrisk med SMHI Öppna Data",
+                infoBtnLabel: "Om datan",
+                langBtnLabel: "English",
+                infoTitle: "Hur fungerar vägvisaren & var kommer datan ifrån?",
+                infoDesc1: "All väderdata hämtas i realtid direkt från <strong>SMHI Öppna Data</strong> via deras öppna punktprognos-API (<code class='text-cyan-300 bg-slate-900/80 px-1.5 py-0.5 rounded'>pmp3g</code>) för mittpunkten på din utritade cykelrutt. Kartan och adressökningen drivs av <strong>OpenStreetMap</strong>.",
+                infoWindTitle: "💨 Motvinds- & medvindsberäkning",
+                infoWindDesc: "Utifrån dina markörer (Start A och Slut B) räknar vi ut exakt kompassriktning (0–360°). Vi jämför den med vindens riktning (wd) och hastighet (ws) med trigonometri för att visa exakt hur många m/s som bromsar eller skjuter på.",
+                infoIceTitle: "❄️ Svartis- & halkvarnare",
+                infoIceDesc: "När temperaturen (t) ligger nära eller under 0°C samtidigt som det förekommer nederbörd (pmean) eller hög luftfuktighet (r > 85%) varnar systemet för förrädisk 'svartis' och rekommenderar dubbdäck.",
+                mapHeading: "1. Välj Start (Hem) & Slut (Jobb) på kartan",
+                mapSubheading: "Dra markörerna, sök på en adress eller klicka i kartan för att sätta din cykelrutt.",
+                modeStartLabel: "Klick sätter Start (A)",
+                modeEndLabel: "Klick sätter Slut (B)",
+                labelStartPoint: "Startpunkt (A - Hem)",
+                labelEndPoint: "Slutpunkt (B - Jobb/Skola)",
+                startSearchPlaceholder: "Sök startadress (t.ex. Södermalm)...",
+                endSearchPlaceholder: "Sök slutadress (t.ex. KTH, Solna)...",
+                legendStart: "A: Start (Hem)",
+                legendEnd: "B: Slut (Jobb)",
+                btnSwapRoute: "Byt håll",
+                settingsHeading: "2. Pendlingsschema & Prognosdag",
+                labelForecastDay: "Välj dag (5-dygnsprognos)",
+                labelCommuteTimes: "Dina pendlingstider",
+                dayToday: "Idag",
+                dayTomorrow: "Imorgon",
+                routeSummaryTitle: "Beräknad cykelrutt (A → B)",
+                statDistLabel: "Avstånd",
+                statTimeLabel: "Cykeltid (~20 km/h)",
+                statBearingLabel: "Riktning (Dit)",
+                labelMorningTime: "Ditresa (A → B)",
+                labelAfternoonTime: "Hemresa (B → A)",
+                directionHelp: "SMHI-prognosen hämtas automatiskt för ruttens mittpunkt. Hemresan (B → A) beräknas i exakt motsatt riktning (180°).",
+                verdictLabel: "Dagens cykeldom",
+                tireRecLabel: "Däckrekommendation",
+                morningTripTitle: "Morgonpendling (A → B)",
+                afternoonTripTitle: "Eftermiddagspendling (B → A)",
+                travelDirLabel: "Färdriktning",
+                windFromLabel: "Vind från",
+                headwindLabel: "Motvind",
+                tailwindLabel: "Medvind",
+                crosswindLabel: "Sidvind",
+                strongHeadwind: "Kraftig motvind",
+                moderateHeadwind: "Måttlig motvind",
+                strongTailwind: "Härlig medvind!",
+                lightTailwind: "Lätt medvind",
+                mostlyCrosswind: "Mest sidvind",
+                effectiveForce: "Effektiv vindkraft i färdriktningen",
+                gustsUpTo: "Byvindar upp till",
+                roadStatusTitle: "Väglag & Halkanalys",
+                gearTitle: "Kläd- & utrustningsråd",
+                feelsLike: "Känns som",
+                humidity: "Luftfuktighet",
+                precip: "Nederbörd",
+                iceSafeTitle: "Torrt eller isfritt väglag",
+                iceSafeDesc: "Temperaturen är på säker sida. Ingen omedelbar risk för underkylt regn eller svartis.",
+                iceRiskTitle: "Risk för lokal halka / frost",
+                iceRiskDesc: "Temperatur nära eller under nollan tillsammans med fukt. Se upp i kurvor, på broar och skuggiga partier.",
+                iceDangerTitle: "VARNING FÖR SVARTIS / BLIXTHALKA!",
+                iceDangerDesc: "Kombination av frysgrader och nederbörd/fukt ger hög risk för osynlig is. Dubbdäck eller kollektivtrafik rekommenderas starkt!",
+                tireSummer: "Vanliga däck OK",
+                tireCaution: "Vinterdäck / Försiktighet",
+                tireStudded: "Dubbdäck krävs!",
+                verdictIceDanger: "Varning för svartis! Sätt på dubbdäck eller ta bussen idag.",
+                verdictIceDangerSub: "Temperaturen ligger runt nollan med fukt/nederbörd under pendlingen.",
+                verdictHardWind: "Tufft pass på sadeln idag – räkna med rejäl motvind!",
+                verdictHardWindSub: "Vinden ligger rakt emot dig på minst en av sträckorna, men väglaget ser isfritt ut.",
+                verdictGreat: "Utmärkt cykelväder! Bara att trampa på.",
+                verdictGreatSub: "Måttliga vindar och låg risk för halka längs din valda rutt.",
+                verdictColdRisk: "Kallt i luften och viss halkrisk – klä dig varmt!",
+                verdictColdRiskSub: "Håll koll på frostfläckar på cykelbanan, särskilt på morgonen.",
+                gearHeavyWinter: "Vinterjacka, vindtäta fodrade handskar, mössa under hjälmen",
+                gearChilly: "Skaljacka/vindjacka, tunna handskar och buff",
+                gearMild: "Lätt cykeljacka eller långärmad tröja",
+                gearWarm: "Kortärmat / lätta träningskläder",
+                gearRain: "Regnjacka & regnbyxor eller skoskydd",
+                gearStuds: "Dubbdäck rekommenderas",
+                gearGlasses: "Cykelglasögon mot fartvind",
+                footerAuthor: "Av Alfred Stengard",
+                footerAppName: "Cykelpendlarens Vägvisare",
+                footerSource: "Källa: SMHI Öppna Data & OpenStreetMap",
+                apiLive: "SMHI Live",
+                apiFallback: "Simulerad SMHI-data (Offline)",
+                forecastTime: "Prognostid"
+            },
+            en: {
+                appTitle: "Bike Commuter's Guide",
+                authorText: "By Alfred Stengard",
+                appSubtitle: "Real-time headwind, tailwind & black ice detector powered by SMHI Open Data",
+                infoBtnLabel: "About Data",
+                langBtnLabel: "Svenska",
+                infoTitle: "How does it work & where does the data come from?",
+                infoDesc1: "All weather data is fetched live from <strong>SMHI Open Data</strong> using their official point forecast API (<code class='text-cyan-300 bg-slate-900/80 px-1.5 py-0.5 rounded'>pmp3g</code>) for the midpoint of your selected bike route. Map tiles and geocoding are powered by <strong>OpenStreetMap</strong>.",
+                infoWindTitle: "💨 Headwind & Tailwind Calculation",
+                infoWindDesc: "From your placed Start (A) and End (B) markers, we compute your exact compass bearing (0–360°) and compare it with wind direction (wd) and wind speed (ws) using trigonometry to calculate exact m/s headwind or tailwind.",
+                infoIceTitle: "❄️ Black Ice & Slipperiness Detector",
+                infoIceDesc: "When temperature (t) drops near or below 0°C combined with precipitation (pmean) or high relative humidity (r > 85%), the system flags hazardous 'black ice' and advises studded tires.",
+                mapHeading: "1. Pick Start (Home) & End (Work) on the Map",
+                mapSubheading: "Drag the markers, search an address, or click the map to set your commute route.",
+                modeStartLabel: "Click sets Start (A)",
+                modeEndLabel: "Click sets End (B)",
+                labelStartPoint: "Start Point (A - Home)",
+                labelEndPoint: "Destination (B - Work/School)",
+                startSearchPlaceholder: "Search start address (e.g. Södermalm)...",
+                endSearchPlaceholder: "Search destination (e.g. KTH, Solna)...",
+                legendStart: "A: Start (Home)",
+                legendEnd: "B: End (Work)",
+                btnSwapRoute: "Swap A⇄B",
+                settingsHeading: "2. Commute Schedule & Day",
+                labelForecastDay: "Select Day (5-Day Forecast)",
+                labelCommuteTimes: "Your Commute Hours",
+                dayToday: "Today",
+                dayTomorrow: "Tomorrow",
+                routeSummaryTitle: "Calculated Bike Route (A → B)",
+                statDistLabel: "Distance",
+                statTimeLabel: "Ride Time (~20 km/h)",
+                statBearingLabel: "Bearing (Outbound)",
+                labelMorningTime: "Outbound (A → B)",
+                labelAfternoonTime: "Return (B → A)",
+                directionHelp: "SMHI forecast is fetched for the midpoint of your route. Your afternoon return trip (B → A) is automatically reversed (180°).",
+                verdictLabel: "Today's Commute Verdict",
+                tireRecLabel: "Tire Recommendation",
+                morningTripTitle: "Morning Commute (A → B)",
+                afternoonTripTitle: "Afternoon Commute (B → A)",
+                travelDirLabel: "Travel Bearing",
+                windFromLabel: "Wind from",
+                headwindLabel: "Headwind",
+                tailwindLabel: "Tailwind",
+                crosswindLabel: "Crosswind",
+                strongHeadwind: "Strong Headwind",
+                moderateHeadwind: "Moderate Headwind",
+                strongTailwind: "Sweet Tailwind!",
+                lightTailwind: "Light Tailwind",
+                mostlyCrosswind: "Mostly Crosswind",
+                effectiveForce: "Effective wind component along route",
+                gustsUpTo: "Gusts up to",
+                roadStatusTitle: "Road Surface & Black Ice Analysis",
+                gearTitle: "Clothing & Gear Advice",
+                feelsLike: "Feels like",
+                humidity: "Humidity",
+                precip: "Precipitation",
+                iceSafeTitle: "Clear Road Conditions",
+                iceSafeDesc: "Temperatures are safely above freezing or dry. No immediate risk of black ice.",
+                iceRiskTitle: "Risk of Local Frost / Slippery Spots",
+                iceRiskDesc: "Temperatures near or below freezing with moisture. Watch out on bridges, corners, and shaded paths.",
+                iceDangerTitle: "BLACK ICE WARNING!",
+                iceDangerDesc: "Sub-zero or near-zero temps combined with precipitation creates invisible black ice. Use studded tires or take transit!",
+                tireSummer: "Standard Tires OK",
+                tireCaution: "Winter Tires / Caution",
+                tireStudded: "Studded Tires Advised!",
+                verdictIceDanger: "Black Ice Warning! Ride with studded tires or take the bus today.",
+                verdictIceDangerSub: "Freezing temperatures and moisture/precipitation detected during your commute hours.",
+                verdictHardWind: "Tough pedal today – brace for strong headwinds!",
+                verdictHardWindSub: "Strong opposing winds on at least one leg of your trip, though road surfaces look ice-free.",
+                verdictGreat: "Prime cycling conditions! Enjoy the ride.",
+                verdictGreatSub: "Manageable winds and low risk of ice along your selected route.",
+                verdictColdRisk: "Crisp air and potential frost patches – dress warm!",
+                verdictColdRiskSub: "Stay alert for icy patches on bike paths, especially during the morning ride.",
+                gearHeavyWinter: "Thermal winter jacket, insulated windproof gloves, skullcap under helmet",
+                gearChilly: "Windproof shell jacket, light gloves & neck gaiter",
+                gearMild: "Light cycling jacket or long-sleeve jersey",
+                gearWarm: "Short sleeves / breathable kit",
+                gearRain: "Waterproof rain jacket, rain pants & shoe covers",
+                gearStuds: "Studded winter tires recommended",
+                gearGlasses: "Cycling glasses against wind chill",
+                footerAuthor: "By Alfred Stengard",
+                footerAppName: "Bike Commuter's Guide",
+                footerSource: "Source: SMHI Open Data & OpenStreetMap",
+                apiLive: "SMHI Live",
+                apiFallback: "Simulated SMHI Data (Offline)",
+                forecastTime: "Forecast hour"
+            }
+        };
+
+        // Weather symbol names (SMHI Wsymb2 1-27)
+        const wsymbDescriptions = {
+            1:  { sv: "Klart", en: "Clear sky", icon: "sun" },
+            2:  { sv: "Nästan klart", en: "Nearly clear", icon: "sun" },
+            3:  { sv: "Växlande molnighet", en: "Variable cloudiness", icon: "cloud-sun" },
+            4:  { sv: "Halvklart", en: "Halfclear sky", icon: "cloud-sun" },
+            5:  { sv: "Molnigt", en: "Cloudy sky", icon: "cloud" },
+            6:  { sv: "Mulet", en: "Overcast", icon: "cloud" },
+            7:  { sv: "Dimma", en: "Fog", icon: "cloud-fog" },
+            8:  { sv: "Lätt regnskur", en: "Light rain showers", icon: "cloud-drizzle" },
+            9:  { sv: "Måttlig regnskur", en: "Moderate rain showers", icon: "cloud-rain" },
+            10: { sv: "Kraftig regnskur", en: "Heavy rain showers", icon: "cloud-rain-wind" },
+            11: { sv: "Åskväder", en: "Thunderstorm", icon: "cloud-lightning" },
+            12: { sv: "Lätt snöblandat regn", en: "Light sleet showers", icon: "cloud-snow" },
+            13: { sv: "Måttligt snöblandat regn", en: "Moderate sleet showers", icon: "cloud-snow" },
+            14: { sv: "Kraftigt snöblandat regn", en: "Heavy sleet showers", icon: "cloud-snow" },
+            15: { sv: "Lätt snöby", en: "Light snow showers", icon: "snowflake" },
+            16: { sv: "Måttlig snöby", en: "Moderate snow showers", icon: "snowflake" },
+            17: { sv: "Kraftig snöby", en: "Heavy snow showers", icon: "snowflake" },
+            18: { sv: "Lätt regn", en: "Light rain", icon: "cloud-drizzle" },
+            19: { sv: "Måttligt regn", en: "Moderate rain", icon: "cloud-rain" },
+            20: { sv: "Kraftigt regn", en: "Heavy rain", icon: "cloud-rain-wind" },
+            21: { sv: "Åska", en: "Thunder", icon: "cloud-lightning" },
+            22: { sv: "Lätt snöblandat regn", en: "Light sleet", icon: "cloud-snow" },
+            23: { sv: "Måttligt snöblandat regn", en: "Moderate sleet", icon: "cloud-snow" },
+            24: { sv: "Kraftigt snöblandat regn", en: "Heavy sleet", icon: "cloud-snow" },
+            25: { sv: "Lätt snöfall", en: "Light snowfall", icon: "snowflake" },
+            26: { sv: "Måttligt snöfall", en: "Moderate snowfall", icon: "snowflake" },
+            27: { sv: "Kraftigt snöfall", en: "Heavy snowfall", icon: "snowflake" }
+        };
+
+        // ==========================================
+        // 2. INTERACTIVE LEAFLET MAP & GEODESIC MATH
+        // ==========================================
+        function initMap() {
+            const midLat = (startCoords.lat + endCoords.lat) / 2;
+            const midLon = (startCoords.lon + endCoords.lon) / 2;
+
+            mapInstance = L.map('commute-map', {
+                zoomControl: true,
+                scrollWheelZoom: true
+            }).setView([midLat, midLon], 12);
+
+            // Använd Esri ArcGIS & OpenTopoMap som varken kräver API-nyckel (som CARTO)
+            // eller blockerar iframes/förhandsgranskningar p.g.a. Referer-policy (som osm.org).
+            const esriStreet = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom',
+                maxZoom: 19
+            });
+
+            const esriTopo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, METI',
+                maxZoom: 19
+            });
+
+            const esriImagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+                maxZoom: 19
+            });
+
+            const openTopo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+                attribution: 'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)',
+                subdomains: 'abc',
+                maxZoom: 17
+            });
+
+            // Starta med Esri Gatukarta som standard och lägg till lager-väljare uppe till höger
+            esriStreet.addTo(mapInstance);
+            L.control.layers({
+                "Gatukarta (Esri)": esriStreet,
+                "Topografisk (Esri)": esriTopo,
+                "Satellit (Esri)": esriImagery,
+                "Terräng / Höjdkurvor (OpenTopo)": openTopo
+            }, null, { position: 'topright' }).addTo(mapInstance);
+
+            const startIcon = L.divIcon({
+                className: '',
+                html: `<div class="custom-marker-pin bg-emerald-600 w-8 h-8">A</div>`,
+                iconSize: [32, 32],
+                iconAnchor: [16, 16]
+            });
+
+            const endIcon = L.divIcon({
+                className: '',
+                html: `<div class="custom-marker-pin bg-blue-600 w-8 h-8">B</div>`,
+                iconSize: [32, 32],
+                iconAnchor: [16, 16]
+            });
+
+            startMarker = L.marker([startCoords.lat, startCoords.lon], {
+                draggable: true,
+                icon: startIcon,
+                title: "Start (A)"
+            }).addTo(mapInstance);
+
+            endMarker = L.marker([endCoords.lat, endCoords.lon], {
+                draggable: true,
+                icon: endIcon,
+                title: "Slut (B)"
+            }).addTo(mapInstance);
+
+            // Drag listeners
+            startMarker.on('dragend', () => {
+                const pos = startMarker.getLatLng();
+                startCoords = { lat: pos.lat, lon: pos.lng };
+                onRouteCoordinatesChanged(false);
+            });
+
+            endMarker.on('dragend', () => {
+                const pos = endMarker.getLatLng();
+                endCoords = { lat: pos.lat, lon: pos.lng };
+                onRouteCoordinatesChanged(false);
+            });
+
+            // Map click listener sets either Start (A) or End (B)
+            mapInstance.on('click', (e) => {
+                if (mapClickMode === 'start') {
+                    startCoords = { lat: e.latlng.lat, lon: e.latlng.lng };
+                    startMarker.setLatLng(e.latlng);
+                    // Automatically switch to 'end' mode for convenience
+                    setMapClickMode('end');
+                } else {
+                    endCoords = { lat: e.latlng.lat, lon: e.latlng.lng };
+                    endMarker.setLatLng(e.latlng);
+                }
+                onRouteCoordinatesChanged(false);
+            });
+
+            updateMapGeometryAndMetrics(true);
+        }
+
+        function setMapClickMode(mode) {
+            mapClickMode = mode;
+            const startBtn = document.getElementById('mode-start-btn');
+            const endBtn = document.getElementById('mode-end-btn');
+
+            if (mode === 'start') {
+                startBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white shadow transition";
+                endBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-300 hover:text-white transition";
+            } else {
+                endBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white shadow transition";
+                startBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-300 hover:text-white transition";
+            }
+        }
+
+        function swapStartAndEnd() {
+            const temp = { ...startCoords };
+            startCoords = { ...endCoords };
+            endCoords = temp;
+
+            const startInput = document.getElementById('start-search-input');
+            const endInput = document.getElementById('end-search-input');
+            const tempText = startInput.value;
+            startInput.value = endInput.value;
+            endInput.value = tempText;
+
+            onRouteCoordinatesChanged(false);
+        }
+
+        // Calculate exact initial compass bearing (0-360°) and Haversine distance (km)
+        function calculateRouteGeodesics(start, end) {
+            const toRad = deg => (deg * Math.PI) / 180;
+            const toDeg = rad => (rad * 180) / Math.PI;
+
+            const lat1 = toRad(start.lat);
+            const lat2 = toRad(end.lat);
+            const dLat = toRad(end.lat - start.lat);
+            const dLon = toRad(end.lon - start.lon);
+
+            // Haversine distance
+            const a = Math.sin(dLat / 2) ** 2 +
+                      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const straightDistKm = 6371 * c;
+            // Realistic urban bike path factor (~1.2x straight line)
+            const bikeDistKm = Math.max(0.2, +(straightDistKm * 1.2).toFixed(1));
+
+            // Forward azimuth / bearing
+            const y = Math.sin(dLon) * Math.cos(lat2);
+            const x = Math.cos(lat1) * Math.sin(lat2) -
+                      Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+            const brng = (toDeg(Math.atan2(y, x)) + 360) % 360;
+
+            return {
+                bearing: Math.round(brng) % 360,
+                distanceKm: bikeDistKm
+            };
+        }
+
+        function updateMapGeometryAndMetrics(fitBounds = false) {
+            if (startMarker && endMarker) {
+                startMarker.setLatLng([startCoords.lat, startCoords.lon]);
+                endMarker.setLatLng([endCoords.lat, endCoords.lon]);
+            }
+
+            if (routeLine && mapInstance) {
+                mapInstance.removeLayer(routeLine);
+            }
+
+            if (mapInstance) {
+                routeLine = L.polyline(
+                    [
+                        [startCoords.lat, startCoords.lon],
+                        [endCoords.lat, endCoords.lon]
+                    ],
+                    {
+                        color: '#2563eb',
+                        weight: 5,
+                        opacity: 0.85,
+                        dashArray: '8, 8'
+                    }
+                ).addTo(mapInstance);
+
+                if (fitBounds) {
+                    const bounds = L.latLngBounds(
+                        [startCoords.lat, startCoords.lon],
+                        [endCoords.lat, endCoords.lon]
+                    );
+                    mapInstance.fitBounds(bounds, { padding: [45, 45], maxZoom: 14 });
+                }
+            }
+
+            // Update geodesic metrics
+            const geo = calculateRouteGeodesics(startCoords, endCoords);
+            morningBearing = geo.bearing;
+            routeDistanceKm = geo.distanceKm;
+
+            // Update coordinate labels & summary stats
+            document.getElementById('start-coords-label').textContent =
+                `${startCoords.lat.toFixed(3)}, ${startCoords.lon.toFixed(3)}`;
+            document.getElementById('end-coords-label').textContent =
+                `${endCoords.lat.toFixed(3)}, ${endCoords.lon.toFixed(3)}`;
+
+            const rideMinutes = Math.max(1, Math.round((routeDistanceKm / 20) * 60));
+            const outCardinal = degreesToCardinal(morningBearing);
+            const returnBearing = (morningBearing + 180) % 360;
+            const retCardinal = degreesToCardinal(returnBearing);
+
+            document.getElementById('stat-dist-val').textContent = `${routeDistanceKm} km`;
+            document.getElementById('stat-time-val').textContent = `${rideMinutes} min`;
+            document.getElementById('stat-bearing-val').textContent = `${morningBearing}° (${outCardinal})`;
+            document.getElementById('selected-bearing-badge').textContent =
+                `${morningBearing}° (${outCardinal}) ⇄ ${returnBearing}° (${retCardinal})`;
+        }
+
+        function onRouteCoordinatesChanged(fitBounds = false) {
+            updateMapGeometryAndMetrics(fitBounds);
+            fetchWeatherData();
+        }
+
+        // OpenStreetMap Nominatim Geocoding Search for Start / End
+        async function searchAddress(target) {
+            const inputId = target === 'start' ? 'start-search-input' : 'end-search-input';
+            const query = document.getElementById(inputId).value.trim();
+            if (!query) return;
+
+            const url = `https://nominatim.openstreetmap.org/search?format=json&countrycodes=se&limit=1&q=${encodeURIComponent(query)}`;
+            try {
+                const res = await fetch(url, {
+                    headers: { 'Accept-Language': currentLang }
+                });
+                const results = await res.json();
+                if (results && results.length > 0) {
+                    const lat = parseFloat(results[0].lat);
+                    const lon = parseFloat(results[0].lon);
+                    if (target === 'start') {
+                        startCoords = { lat, lon };
+                    } else {
+                        endCoords = { lat, lon };
+                    }
+                    onRouteCoordinatesChanged(true);
+                }
+            } catch (err) {
+                console.warn("Address search error:", err);
+            }
+        }
+
+        function useGeolocationForStart() {
+            if (!navigator.geolocation) return;
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    startCoords = {
+                        lat: pos.coords.latitude,
+                        lon: pos.coords.longitude
+                    };
+                    onRouteCoordinatesChanged(true);
+                },
+                () => {
+                    fetchWeatherData();
+                }
+            );
+        }
+
+        function selectForecastDay(dayOffset) {
+            selectedDayOffset = dayOffset;
+            renderDaySelector();
+            recalculateCommute();
+        }
+
+        function renderDaySelector() {
+            const container = document.getElementById('day-selector-grid');
+            const selectedDateLabel = document.getElementById('selected-date-label');
+            if (!container) return;
+
+            const t = i18n[currentLang];
+            const locale = currentLang === 'sv' ? 'sv-SE' : 'en-US';
+            const now = new Date();
+
+            let html = '';
+            for (let i = 0; i < 5; i++) {
+                const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+                const weekdayShort = d.toLocaleDateString(locale, { weekday: 'short' }).replace('.', '');
+                const dateNum = d.toLocaleDateString(locale, { day: 'numeric', month: 'numeric' });
+                const isSelected = i === selectedDayOffset;
+
+                let topLabel = weekdayShort.charAt(0).toUpperCase() + weekdayShort.slice(1);
+                if (i === 0) topLabel = t.dayToday;
+
+                if (isSelected && selectedDateLabel) {
+                    const fullWeekday = d.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'short' });
+                    selectedDateLabel.textContent = i === 0
+                        ? `${t.dayToday} (${fullWeekday})`
+                        : (i === 1 ? `${t.dayTomorrow} (${fullWeekday})` : fullWeekday.charAt(0).toUpperCase() + fullWeekday.slice(1));
+                }
+
+                html += `
+                    <button type="button" onclick="selectForecastDay(${i})"
+                        class="flex flex-col items-center justify-center py-2 px-1 rounded-xl border text-center transition ${
+                            isSelected
+                                ? 'bg-gradient-to-b from-blue-600 to-blue-700 text-white border-blue-400 shadow-md shadow-blue-900/40 scale-[1.03]'
+                                : 'bg-slate-950/70 hover:bg-slate-800 text-slate-300 border-slate-800'
+                        }">
+                        <span class="text-[11px] font-bold tracking-tight truncate max-w-full">${topLabel}</span>
+                        <span class="text-[10px] font-mono ${isSelected ? 'text-blue-100' : 'text-slate-400'} mt-0.5">${dateNum}</span>
+                    </button>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        function toggleInfoModal() {
+            const box = document.getElementById('info-box');
+            box.classList.toggle('hidden');
+        }
+
+        function toggleLanguage() {
+            currentLang = currentLang === 'sv' ? 'en' : 'sv';
+            document.documentElement.lang = currentLang;
+            applyStaticTranslations();
+            updateMapGeometryAndMetrics(false);
+            recalculateCommute();
+        }
+
+        function applyStaticTranslations() {
+            const t = i18n[currentLang];
+            document.getElementById('app-title').textContent = t.appTitle;
+            document.getElementById('author-text').textContent = t.authorText;
+            document.getElementById('app-subtitle').textContent = t.appSubtitle;
+            document.getElementById('info-btn-label').textContent = t.infoBtnLabel;
+            document.getElementById('lang-btn-label').textContent = t.langBtnLabel;
+            document.getElementById('info-title').textContent = t.infoTitle;
+            document.getElementById('info-desc-1').innerHTML = t.infoDesc1;
+            document.getElementById('info-wind-title').textContent = t.infoWindTitle;
+            document.getElementById('info-wind-desc').textContent = t.infoWindDesc;
+            document.getElementById('info-ice-title').textContent = t.infoIceTitle;
+            document.getElementById('info-ice-desc').textContent = t.infoIceDesc;
+
+            document.getElementById('map-heading').textContent = t.mapHeading;
+            document.getElementById('map-subheading').textContent = t.mapSubheading;
+            document.getElementById('mode-start-label').textContent = t.modeStartLabel;
+            document.getElementById('mode-end-label').textContent = t.modeEndLabel;
+            document.getElementById('label-start-point').textContent = t.labelStartPoint;
+            document.getElementById('label-end-point').textContent = t.labelEndPoint;
+            document.getElementById('start-search-input').placeholder = t.startSearchPlaceholder;
+            document.getElementById('end-search-input').placeholder = t.endSearchPlaceholder;
+            document.getElementById('legend-start').textContent = t.legendStart;
+            document.getElementById('legend-end').textContent = t.legendEnd;
+            document.getElementById('btn-swap-route').textContent = t.btnSwapRoute;
+
+            document.getElementById('settings-heading').textContent = t.settingsHeading;
+            document.getElementById('label-forecast-day').innerHTML = `<i data-lucide="calendar-days" class="w-3.5 h-3.5 text-blue-400"></i> ${t.labelForecastDay}`;
+            document.getElementById('label-commute-times').innerHTML = `<i data-lucide="alarm-clock" class="w-3.5 h-3.5 text-amber-400"></i> ${t.labelCommuteTimes}`;
+            document.getElementById('route-summary-title').innerHTML = `<i data-lucide="route" class="w-3.5 h-3.5"></i> ${t.routeSummaryTitle}`;
+            document.getElementById('stat-dist-label').textContent = t.statDistLabel;
+            document.getElementById('stat-time-label').textContent = t.statTimeLabel;
+            document.getElementById('stat-bearing-label').textContent = t.statBearingLabel;
+
+            document.getElementById('label-morning-time').textContent = t.labelMorningTime;
+            document.getElementById('label-afternoon-time').textContent = t.labelAfternoonTime;
+            document.getElementById('direction-help').textContent = t.directionHelp;
+            document.getElementById('verdict-label').textContent = t.verdictLabel;
+            document.getElementById('tire-rec-label').textContent = t.tireRecLabel;
+            document.getElementById('footer-author').textContent = t.footerAuthor;
+            document.getElementById('footer-app-name').textContent = t.footerAppName;
+            document.getElementById('footer-source').textContent = t.footerSource;
+            document.getElementById('api-status-text').textContent = isUsingFallback ? t.apiFallback : t.apiLive;
+            renderDaySelector();
+        }
+
+        // ==========================================
+        // 3. SMHI OPEN DATA API INTEGRATION
+        // ==========================================
+        function getSelectedCoordinates() {
+            // Use the midpoint between Start (A) and End (B) for the SMHI weather forecast
+            const midLat = (startCoords.lat + endCoords.lat) / 2;
+            const midLon = (startCoords.lon + endCoords.lon) / 2;
+            return {
+                lat: Math.min(Math.max(midLat, 55.0), 69.5).toFixed(4),
+                lon: Math.min(Math.max(midLon, 10.5), 24.5).toFixed(4)
+            };
+        }
+
+        async function fetchWeatherData() {
+            const { lat, lon } = getSelectedCoordinates();
+            const refreshIcon = document.getElementById('refresh-icon');
+            if (refreshIcon) refreshIcon.classList.add('animate-spin');
+
+            const url = `https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/geotype/point/lon/${lon}/lat/${lat}/data.json`;
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`SMHI HTTP ${response.status}`);
+                const data = await response.json();
+                weatherTimeSeries = data.timeSeries || [];
+                isUsingFallback = false;
+                updateApiBadge(true);
+            } catch (err) {
+                console.warn("SMHI API fallback triggered:", err);
+                weatherTimeSeries = generateFallbackTimeSeries();
+                isUsingFallback = true;
+                updateApiBadge(false);
+            } finally {
+                if (refreshIcon) setTimeout(() => refreshIcon.classList.remove('animate-spin'), 400);
+                const now = new Date();
+                document.getElementById('last-updated').textContent = 
+                    `${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                recalculateCommute();
+            }
+        }
+
+        function updateApiBadge(isLive) {
+            const badge = document.getElementById('api-status-badge');
+            const text = document.getElementById('api-status-text');
+            const t = i18n[currentLang];
+            if (isLive) {
+                badge.className = "inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
+                text.textContent = t.apiLive;
+            } else {
+                badge.className = "inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30";
+                text.textContent = t.apiFallback;
+            }
+        }
+
+        // Clean fallback generator if user is offline or outside SMHI grid (covers 5 days / 120 hours)
+        function generateFallbackTimeSeries() {
+            const series = [];
+            const baseDate = new Date();
+            baseDate.setMinutes(0, 0, 0);
+
+            for (let i = 0; i < 125; i++) {
+                const d = new Date(baseDate.getTime() + i * 3600 * 1000);
+                const hour = d.getHours();
+                const dayIdx = Math.floor(i / 24);
+                const temp = +( (hour < 10 ? -0.4 : (hour < 16 ? 3.2 : 0.8)) + (dayIdx % 3) - 1 ).toFixed(1);
+                const ws = +( (hour < 12 ? 4.8 : 7.4) + (dayIdx * 0.5) ).toFixed(1);
+                const wd = (210 + dayIdx * 35) % 360;
+                const pmean = (hour >= 16 && hour <= 18 && dayIdx % 2 === 0) ? 0.4 : 0.0;
+
+                series.push({
+                    validTime: d.toISOString(),
+                    parameters: [
+                        { name: 't', values: [temp] },
+                        { name: 'ws', values: [ws] },
+                        { name: 'gust', values: [ +(ws * 1.45).toFixed(1) ] },
+                        { name: 'wd', values: [wd] },
+                        { name: 'pmean', values: [pmean] },
+                        { name: 'r', values: [86] },
+                        { name: 'Wsymb2', values: [pmean > 0 ? 12 : (dayIdx % 2 === 0 ? 3 : 1)] }
+                    ]
+                });
+            }
+            return series;
+        }
+
+        // Helper to extract a parameter from an SMHI timeSeries entry
+        function getParam(entry, paramName, defaultVal = 0) {
+            if (!entry || !entry.parameters) return defaultVal;
+            const found = entry.parameters.find(p => p.name === paramName);
+            return found && found.values && found.values.length > 0 ? found.values[0] : defaultVal;
+        }
+
+        // Find the forecast entry closest to the target hour (0-23) on the selected day offset (0-4)
+        function findForecastForHour(targetHour, dayOffset = 0) {
+            if (!weatherTimeSeries || weatherTimeSeries.length === 0) return null;
+
+            const now = new Date();
+            const targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset, targetHour, 0, 0);
+
+            let closest = weatherTimeSeries[0];
+            let minDiff = Infinity;
+
+            for (const item of weatherTimeSeries) {
+                const itemTime = new Date(item.validTime).getTime();
+                const diff = Math.abs(itemTime - targetDate.getTime());
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closest = item;
+                }
+            }
+            return closest;
+        }
+
+        // ==========================================
+        // 4. PHYSICS: HEADWIND & BLACK ICE ENGINE
+        // ==========================================
+        function analyzeTrip(forecastEntry, travelBearing) {
+            const t = getParam(forecastEntry, 't', 2.0);
+            const ws = getParam(forecastEntry, 'ws', 4.0);
+            const gust = getParam(forecastEntry, 'gust', ws * 1.3);
+            const wd = getParam(forecastEntry, 'wd', 180); // Direction wind blows FROM
+            const pmean = getParam(forecastEntry, 'pmean', 0);
+            const r = getParam(forecastEntry, 'r', 75);
+            const wsymb = getParam(forecastEntry, 'Wsymb2', 3);
+
+            // Angle difference between where cyclist is heading and where wind comes FROM
+            // If cyclist rides East (90°) and wind is FROM East (90°), angleDiff = 0° -> 100% Headwind.
+            // If cyclist rides East (90°) and wind is FROM West (270°), angleDiff = 180° -> 100% Tailwind.
+            const rad = ((wd - travelBearing) * Math.PI) / 180;
+            const headwindComponent = ws * Math.cos(rad); // Positive = Headwind, Negative = Tailwind
+            const crosswindComponent = Math.abs(ws * Math.sin(rad));
+
+            // Wind Chill (Feels Like) approximation for cycling speed (~5 m/s + wind)
+            const vKmh = Math.max((ws + 3) * 3.6, 5);
+            const feelsLike = t <= 10
+                ? +(13.12 + 0.6215 * t - 11.37 * Math.pow(vKmh, 0.16) + 0.3965 * t * Math.pow(vKmh, 0.16)).toFixed(1)
+                : t;
+
+            // Black Ice / Slipperiness Logic
+            // Level 0 = Safe, Level 1 = Caution/Frost Risk, Level 2 = Black Ice Danger
+            let iceLevel = 0;
+            if ((t <= 1.2 && t >= -6.0 && pmean > 0) || (t <= 0.5 && t >= -4.0 && r >= 88)) {
+                iceLevel = 2; // High risk of black ice / freezing rain / wet freeze
+            } else if (t <= 2.0 && (r >= 80 || pmean > 0 || t <= 0)) {
+                iceLevel = 1; // General frost or cold slippery risk
+            }
+
+            return {
+                validTime: forecastEntry ? forecastEntry.validTime : new Date().toISOString(),
+                t,
+                feelsLike,
+                ws,
+                gust,
+                wd,
+                pmean,
+                r,
+                wsymb,
+                travelBearing,
+                headwindComponent: +headwindComponent.toFixed(1),
+                crosswindComponent: +crosswindComponent.toFixed(1),
+                iceLevel
+            };
+        }
+
+        function degreesToCardinal(deg) {
+            const index = Math.round(((deg %= 360) < 0 ? deg + 360 : deg) / 45) % 8;
+            const dir = directions[index];
+            return currentLang === 'sv' ? dir.shortSv : dir.shortEn;
+        }
+
+        // ==========================================
+        // 5. RENDERING TRIP CARDS & VERDICT
+        // ==========================================
+        function recalculateCommute() {
+            if (!weatherTimeSeries || weatherTimeSeries.length === 0) return;
+
+            const morningHour = parseInt(document.getElementById('morning-time').value, 10);
+            const afternoonHour = parseInt(document.getElementById('afternoon-time').value, 10);
+            const returnBearing = (morningBearing + 180) % 360;
+
+            const morningEntry = findForecastForHour(morningHour, selectedDayOffset);
+            const afternoonEntry = findForecastForHour(afternoonHour, selectedDayOffset);
+
+            const morningAnalysis = analyzeTrip(morningEntry, morningBearing);
+            const afternoonAnalysis = analyzeTrip(afternoonEntry, returnBearing);
+
+            renderTripCard('morning-card', morningAnalysis, true);
+            renderTripCard('afternoon-card', afternoonAnalysis, false);
+            renderVerdictBanner(morningAnalysis, afternoonAnalysis);
+
+            lucide.createIcons();
+        }
+
+        function renderVerdictBanner(morning, afternoon) {
+            const t = i18n[currentLang];
+            const maxIce = Math.max(morning.iceLevel, afternoon.iceLevel);
+            const maxHeadwind = Math.max(morning.headwindComponent, afternoon.headwindComponent);
+
+            const banner = document.getElementById('verdict-banner');
+            const iconBox = document.getElementById('verdict-icon-box');
+            const title = document.getElementById('verdict-title');
+            const subtitle = document.getElementById('verdict-subtitle');
+            const tireVal = document.getElementById('tire-rec-value');
+            const tireIcon = document.getElementById('tire-icon');
+
+            if (maxIce === 2) {
+                banner.className = "rounded-2xl p-5 sm:p-6 border transition-all duration-300 shadow-lg bg-gradient-to-r from-rose-950/80 via-slate-900 to-slate-900 border-rose-500/50";
+                iconBox.className = "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse-slow";
+                iconBox.innerHTML = `<i data-lucide="alert-triangle" class="w-6 h-6"></i>`;
+                title.textContent = t.verdictIceDanger;
+                subtitle.textContent = t.verdictIceDangerSub;
+                tireVal.textContent = t.tireStudded;
+                tireVal.className = "text-sm font-bold text-rose-400";
+                tireIcon.className = "w-6 h-6 text-rose-400";
+            } else if (maxIce === 1) {
+                banner.className = "rounded-2xl p-5 sm:p-6 border transition-all duration-300 shadow-lg bg-gradient-to-r from-amber-950/60 via-slate-900 to-slate-900 border-amber-500/40";
+                iconBox.className = "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-amber-500/20 text-amber-300 border border-amber-500/30";
+                iconBox.innerHTML = `<i data-lucide="snowflake" class="w-6 h-6"></i>`;
+                title.textContent = t.verdictColdRisk;
+                subtitle.textContent = t.verdictColdRiskSub;
+                tireVal.textContent = t.tireCaution;
+                tireVal.className = "text-sm font-bold text-amber-300";
+                tireIcon.className = "w-6 h-6 text-amber-300";
+            } else if (maxHeadwind >= 4.5) {
+                banner.className = "rounded-2xl p-5 sm:p-6 border transition-all duration-300 shadow-lg bg-gradient-to-r from-blue-950/70 via-slate-900 to-slate-900 border-blue-500/40";
+                iconBox.className = "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-blue-500/20 text-blue-400 border border-blue-500/30";
+                iconBox.innerHTML = `<i data-lucide="wind" class="w-6 h-6"></i>`;
+                title.textContent = t.verdictHardWind;
+                subtitle.textContent = t.verdictHardWindSub;
+                tireVal.textContent = t.tireSummer;
+                tireVal.className = "text-sm font-bold text-emerald-400";
+                tireIcon.className = "w-6 h-6 text-emerald-400";
+            } else {
+                banner.className = "rounded-2xl p-5 sm:p-6 border transition-all duration-300 shadow-lg bg-gradient-to-r from-emerald-950/60 via-slate-900 to-slate-900 border-emerald-500/40";
+                iconBox.className = "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+                iconBox.innerHTML = `<i data-lucide="check-circle-2" class="w-6 h-6"></i>`;
+                title.textContent = t.verdictGreat;
+                subtitle.textContent = t.verdictGreatSub;
+                tireVal.textContent = t.tireSummer;
+                tireVal.className = "text-sm font-bold text-emerald-400";
+                tireIcon.className = "w-6 h-6 text-emerald-400";
+            }
+        }
+
+        function renderTripCard(containerId, data, isMorning) {
+            const t = i18n[currentLang];
+            const container = document.getElementById(containerId);
+
+            // Format date & time clearly so user sees both day and hour
+            const dateObj = new Date(data.validTime);
+            const locale = currentLang === 'sv' ? 'sv-SE' : 'en-US';
+            const dayName = dateObj.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' });
+            const timeStr = dateObj.toLocaleTimeString(locale, {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+
+            // Weather symbol info
+            const sym = wsymbDescriptions[data.wsymb] || wsymbDescriptions[3];
+            const symLabel = currentLang === 'sv' ? sym.sv : sym.en;
+
+            // Determine Wind Status Badge & Color
+            let windBadgeText = t.mostlyCrosswind;
+            let windBadgeColor = "bg-slate-800 text-slate-300 border-slate-700";
+            let windValueDisplay = `${Math.abs(data.headwindComponent)} m/s`;
+            let windSignLabel = t.crosswindLabel;
+
+            if (data.headwindComponent >= 4.0) {
+                windBadgeText = t.strongHeadwind;
+                windBadgeColor = "bg-rose-500/15 text-rose-300 border-rose-500/30";
+                windSignLabel = t.headwindLabel;
+            } else if (data.headwindComponent >= 1.2) {
+                windBadgeText = t.moderateHeadwind;
+                windBadgeColor = "bg-amber-500/15 text-amber-300 border-amber-500/30";
+                windSignLabel = t.headwindLabel;
+            } else if (data.headwindComponent <= -3.5) {
+                windBadgeText = t.strongTailwind;
+                windBadgeColor = "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
+                windSignLabel = t.tailwindLabel;
+            } else if (data.headwindComponent <= -1.0) {
+                windBadgeText = t.lightTailwind;
+                windBadgeColor = "bg-teal-500/15 text-teal-300 border-teal-500/30";
+                windSignLabel = t.tailwindLabel;
+            }
+
+            // Determine Ice Alert Box
+            let iceBoxClass = "bg-emerald-950/40 border-emerald-500/30 text-emerald-200";
+            let iceIcon = "shield-check";
+            let iceIconColor = "text-emerald-400";
+            let iceTitle = t.iceSafeTitle;
+            let iceDesc = t.iceSafeDesc;
+
+            if (data.iceLevel === 2) {
+                iceBoxClass = "bg-rose-950/60 border-rose-500/50 text-rose-100";
+                iceIcon = "Flame"; // High alert icon
+                iceIcon = "alert-octagon";
+                iceIconColor = "text-rose-400";
+                iceTitle = t.iceDangerTitle;
+                iceDesc = t.iceDangerDesc;
+            } else if (data.iceLevel === 1) {
+                iceBoxClass = "bg-amber-950/50 border-amber-500/40 text-amber-100";
+                iceIcon = "snowflake";
+                iceIconColor = "text-amber-400";
+                iceTitle = t.iceRiskTitle;
+                iceDesc = t.iceRiskDesc;
+            }
+
+            // Build Clothing & Gear Pills
+            const gearList = [];
+            if (data.feelsLike <= 0) {
+                gearList.push({ icon: "thermometer-snowflake", text: t.gearHeavyWinter });
+            } else if (data.feelsLike <= 9) {
+                gearList.push({ icon: "shirt", text: t.gearChilly });
+            } else if (data.feelsLike <= 16) {
+                gearList.push({ icon: "shirt", text: t.gearMild });
+            } else {
+                gearList.push({ icon: "sun", text: t.gearWarm });
+            }
+
+            if (data.pmean > 0) {
+                gearList.push({ icon: "umbrella", text: t.gearRain });
+            }
+            if (data.iceLevel === 2) {
+                gearList.push({ icon: "disc", text: t.gearStuds });
+            } else if (data.ws >= 6) {
+                gearList.push({ icon: "glasses", text: t.gearGlasses });
+            }
+
+            // Meteorological wind direction `wd` is where wind comes FROM.
+            // Therefore, the wind blows TOWARDS `(wd + 180) % 360`.
+            const windBlowsTo = (data.wd + 180) % 360;
+            const travelCardinal = degreesToCardinal(data.travelBearing);
+            const windFromCardinal = degreesToCardinal(data.wd);
+
+            container.innerHTML = `
+                <!-- Card Header -->
+                <div class="flex items-start justify-between gap-3 border-b border-slate-800 pb-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="p-1.5 rounded-lg ${isMorning ? 'bg-amber-500/15 text-amber-400' : 'bg-indigo-500/15 text-indigo-400'}">
+                                <i data-lucide="${isMorning ? 'sunrise' : 'sunset'}" class="w-4 h-4"></i>
+                            </span>
+                            <h3 class="font-bold text-white text-base sm:text-lg">
+                                ${isMorning ? t.morningTripTitle : t.afternoonTripTitle}
+                            </h3>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">
+                            ${t.forecastTime}: <span class="font-mono text-slate-200 font-semibold">${dayName} ${timeStr}</span> • ${symLabel}
+                        </p>
+                    </div>
+
+                    <!-- Temperature Pill -->
+                    <div class="text-right">
+                        <div class="flex items-center justify-end gap-1.5">
+                            <i data-lucide="${sym.icon}" class="w-5 h-5 text-cyan-400"></i>
+                            <span class="text-2xl font-extrabold text-white">${data.t}°C</span>
+                        </div>
+                        <span class="text-xs text-slate-400 block">${t.feelsLike} ${data.feelsLike}°C</span>
+                    </div>
+                </div>
+
+                <!-- Wind Vector & Compass Comparison -->
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center bg-slate-900/70 p-4 rounded-2xl border border-slate-800/90">
+                    
+                    <!-- SVG Visual Vector Compass -->
+                    <div class="sm:col-span-5 flex flex-col items-center justify-center">
+                        <div class="relative w-32 h-32 flex items-center justify-center">
+                            <svg viewBox="0 0 120 120" class="w-full h-full">
+                                <!-- Outer Ring -->
+                                <circle cx="60" cy="60" r="52" fill="#0f172a" stroke="#334155" stroke-width="2" stroke-dasharray="4 4" />
+                                <!-- Cardinal ticks -->
+                                <text x="60" y="17" text-anchor="middle" fill="#64748b" font-size="9" font-weight="bold">N</text>
+                                <text x="105" y="63" text-anchor="middle" fill="#64748b" font-size="9" font-weight="bold">${currentLang === 'sv' ? 'Ö' : 'E'}</text>
+                                <text x="60" y="110" text-anchor="middle" fill="#64748b" font-size="9" font-weight="bold">S</text>
+                                <text x="15" y="63" text-anchor="middle" fill="#64748b" font-size="9" font-weight="bold">${currentLang === 'sv' ? 'V' : 'W'}</text>
+
+                                <!-- Cyclist Route Arrow (Blue) -->
+                                <g transform="rotate(${data.travelBearing}, 60, 60)">
+                                    <line x1="60" y1="78" x2="60" y2="26" stroke="#3b82f6" stroke-width="4" stroke-linecap="round" />
+                                    <polygon points="60,18 53,30 67,30" fill="#3b82f6" />
+                                </g>
+
+                                <!-- Wind Flow Arrow (Cyan/Amber dashed) -->
+                                <g transform="rotate(${windBlowsTo}, 60, 60)">
+                                    <line x1="60" y1="82" x2="60" y2="30" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="4 3" stroke-linecap="round" />
+                                    <polygon points="60,22 55,32 65,32" fill="#f59e0b" />
+                                </g>
+
+                                <circle cx="60" cy="60" r="4" fill="#f8fafc" />
+                            </svg>
+                        </div>
+                        <div class="flex items-center gap-3 text-[11px] text-slate-400 mt-1">
+                            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span> ${t.travelDirLabel} (${travelCardinal})</span>
+                            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span> Vind (${windFromCardinal})</span>
+                        </div>
+                    </div>
+
+                    <!-- Wind Stats Breakdown -->
+                    <div class="sm:col-span-7 space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <span class="px-3 py-1 rounded-full text-xs font-bold border ${windBadgeColor}">
+                                ${windBadgeText}
+                            </span>
+                            <span class="text-xs font-mono text-slate-400">
+                                ${t.windFromLabel}: ${data.wd}° (${windFromCardinal})
+                            </span>
+                        </div>
+
+                        <div>
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-2xl font-extrabold text-white">${windValueDisplay}</span>
+                                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">${windSignLabel}</span>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-0.5">
+                                ${t.effectiveForce} (Total: ${data.ws} m/s, ${t.gustsUpTo} ${data.gust} m/s)
+                            </p>
+                        </div>
+
+                        <!-- Mini Weather Bar: Precip & Humidity -->
+                        <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800 text-xs">
+                            <div class="flex items-center gap-1.5 text-slate-300">
+                                <i data-lucide="droplets" class="w-3.5 h-3.5 text-blue-400"></i>
+                                <span>${t.precip}: <strong>${data.pmean} mm/h</strong></span>
+                            </div>
+                            <div class="flex items-center gap-1.5 text-slate-300">
+                                <i data-lucide="gauge" class="w-3.5 h-3.5 text-cyan-400"></i>
+                                <span>${t.humidity}: <strong>${data.r}%</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Road Surface & Black Ice Box -->
+                <div class="p-4 rounded-2xl border ${iceBoxClass} flex items-start gap-3.5">
+                    <div class="p-2 rounded-xl bg-slate-950/50 ${iceIconColor} shrink-0 mt-0.5">
+                        <i data-lucide="${iceIcon}" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <span class="text-[11px] font-bold uppercase tracking-wider opacity-75 block">${t.roadStatusTitle}</span>
+                        <h4 class="font-bold text-sm sm:text-base mt-0.5">${iceTitle}</h4>
+                        <p class="text-xs opacity-90 mt-1 leading-relaxed">${iceDesc}</p>
+                    </div>
+                </div>
+
+                <!-- Clothing & Gear Recommendations -->
+                <div class="pt-1">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 block mb-2 flex items-center gap-1.5">
+                        <i data-lucide="backpack" class="w-3.5 h-3.5 text-blue-400"></i>
+                        ${t.gearTitle}
+                    </span>
+                    <div class="flex flex-wrap gap-2">
+                        ${gearList.map(item => `
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-slate-200">
+                                <i data-lucide="${item.icon}" class="w-3.5 h-3.5 text-cyan-400 shrink-0"></i>
+                                <span>${item.text}</span>
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // ==========================================
+        // 6. STARTUP ON WINDOW LOAD
+        // ==========================================
+        window.onload = function () {
+            applyStaticTranslations();
+            initMap();
+            fetchWeatherData();
+            lucide.createIcons();
+        };
+    </script>
+</body>
+</html>
