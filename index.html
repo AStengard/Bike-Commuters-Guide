@@ -1048,8 +1048,8 @@
 
         async function fetchWeatherData() {
             const { lat, lon } = getSelectedCoordinates();
-            const refreshIcon = document.getElementById('refresh-icon');
-            if (refreshIcon) refreshIcon.classList.add('animate-spin');
+            const initialIcon = document.getElementById('refresh-icon');
+            if (initialIcon) initialIcon.classList.add('animate-spin');
 
             const url = `https://opendata-download-metfcst.smhi.se/api/category/snow1g/version/1/geotype/point/lon/${lon}/lat/${lat}/data.json`;
 
@@ -1066,11 +1066,16 @@
                 isUsingFallback = true;
                 updateApiBadge(false);
             } finally {
-                if (refreshIcon) setTimeout(() => refreshIcon.classList.remove('animate-spin'), 400);
                 const now = new Date();
                 document.getElementById('last-updated').textContent = 
                     `${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
                 recalculateCommute();
+                
+                // Leta upp den *nya* SVG-ikonen som Lucide skapat och stoppa snurrandet
+                setTimeout(() => {
+                    const currentIcon = document.getElementById('refresh-icon');
+                    if (currentIcon) currentIcon.classList.remove('animate-spin');
+                }, 400);
             }
         }
 
