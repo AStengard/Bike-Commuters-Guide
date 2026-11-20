@@ -126,7 +126,7 @@ Bike-Commuters-Guide/
 
 ## 👤 Author
 
-Created with care by **Alfred Stengård**.
+Created with care by **Alfred Stengard**.
 
 ## 📄 License
 
