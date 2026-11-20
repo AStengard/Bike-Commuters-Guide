@@ -41,42 +41,6 @@ An intelligent, lightweight web application for bike commuters in Sweden. Check 
 
 ---
 
-## 🚀 Getting Started
-
-### Option 1: Direct in Browser (No Server Needed)
-Simply open `index.html` directly in your favorite modern browser:
-- **Windows**: Double-click `index.html` or run `start index.html` in PowerShell/CMD.
-- **macOS**: Run `open index.html` in Terminal.
-- **Linux**: Run `xdg-open index.html`.
-
-### Option 2: Local HTTP Server
-If you prefer running via a local web server:
-
-**Using Python:**
-```bash
-python -m http.server 8000
-```
-Then visit `http://localhost:8000`.
-
-**Using Node.js (npx):**
-```bash
-npx serve .
-```
-
----
-
-## 🌐 Deploying to GitHub Pages
-
-You can host this application for free on GitHub Pages:
-
-1. Push this repository to GitHub.
-2. In your GitHub repository, navigate to **Settings** > **Pages**.
-3. Under **Build and deployment** > **Source**, choose **Deploy from a branch**.
-4. Select the `main` branch (folder `/ (root)`) and click **Save**.
-5. Your bike commute app will be live within seconds at `https://<username>.github.io/<repo-name>/`!
-
----
-
 ## 🧠 How It Works
 
 ### 1. Route Compass Bearing & Wind Component
